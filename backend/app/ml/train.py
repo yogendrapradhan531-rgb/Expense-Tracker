@@ -1,6 +1,9 @@
-"""Train the classifier. Run from backend/:  python -m app.ml.train"""
-from pathlib import Path
+"""Model training pipeline using Scikit-Learn (TF-IDF + Logistic Regression).
 
+Usage:
+    python -m app.ml.train (from backend/)
+"""
+from pathlib import Path
 import joblib
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
@@ -8,7 +11,7 @@ from sklearn.pipeline import Pipeline
 
 MODEL_PATH = Path(__file__).parent / "classifier.pkl"
 
-# Starter data. Add more rows here to improve accuracy.
+# Starter seed dataset covering everyday transaction descriptions
 SAMPLES = {
     "Food & Dining": [
         "Starbucks Coffee downtown", "McDonalds burger meal", "Dominos pizza order",
@@ -52,13 +55,14 @@ SAMPLES = {
 
 
 def build_dataset():
+    """Combines seed training samples with verified user corrections from PostgreSQL."""
     texts, labels = [], []
     for label, items in SAMPLES.items():
         for t in items:
             texts.append(t.lower())
             labels.append(label)
 
-    # Add real, user-confirmed transactions (is_predicted = False) from the DB
+    # Active learning loop: incorporate user-confirmed transactions (is_predicted = False)
     try:
         from app.database import SessionLocal
         from app.models import Transaction
@@ -83,9 +87,11 @@ def build_dataset():
 
 
 def train():
+    """Trains the NLP classification pipeline and serializes the resulting model artifact."""
     texts, labels = build_dataset()
+    
+    # Character n-grams (analyzer='char_wb') effectively handle merchant abbreviations, typos, and brands
     model = Pipeline([
-        # char n-grams cope well with brand names, typos, short descriptions
         ("tfidf", TfidfVectorizer(analyzer="char_wb", ngram_range=(2, 4), sublinear_tf=True)),
         ("clf", LogisticRegression(max_iter=2000, C=10)),
     ])
